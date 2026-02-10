@@ -1,12 +1,8 @@
-# 🌐 Zeta Network - Réseau Social P2P
+# 🌐 Zeta Network Relay
 
-Réseau social décentralisé basé sur libp2p et Gossipsub.
+Relais P2P pour le réseau social décentralisé Zeta Network.
 
-## 🚀 Déploiement Rapide
-
-### Serveur Central (zetanetwork.org)
+## 🚀 Installation en 1 commande
 
 ```bash
-cd central-hub
-pip install -r requirements.txt
-python app.py
+curl -sSL https://raw.githubusercontent.com/zetanetwork/relay/main/install.sh | sudo bash
