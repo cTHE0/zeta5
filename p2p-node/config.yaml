@@ -1,31 +1,11 @@
-# Zeta Network Relay - Exemple de configuration
-# Copiez vers config.yaml et modifiez selon vos besoins
-
 network:
   listen_address: "0.0.0.0"
   listen_port: 4001
-  public_ip: "VOTRE_IP_PUBLIQUE"
+  public_ip: "65.75.201.11"  # VOTRE IP
   max_connections: 1000
-  heartbeat_interval: 30
-
-gossip:
-  topics:
-    - "zeta-network-global"
-    - "zeta-system-announcements"
-  message_cache_size: 5000
-  heartbeat_interval: 1
-  max_message_size: 1048576  # 1MB
 
 bootstrap:
   central_hub: "https://zetanetwork.org"
-  min_connections: 1
-  max_connections: 10
 
 logging:
   level: "INFO"
-  file: "/home/zetanode/zeta-relay.log"
-
-relay:
-  name: "Mon-Relais"
-  contact: "admin@example.com"
-  region: "auto"

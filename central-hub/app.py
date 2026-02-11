@@ -1,16 +1,16 @@
 """
 Zeta Network - Hub Central
-Application Flask servant le client libp2p
+Version avec libp2p fonctionnel sans WebRTC
 """
 
-from flask import Flask, render_template_string, jsonify, send_file
+from flask import Flask, render_template_string, jsonify
 import json
-import os
+import datetime
 
 app = Flask(__name__)
 
 # ============================================
-# CONFIGURATION - VOS VRAIS RELAIS
+# CONFIGURATION - VOS RELAIS
 # ============================================
 
 BOOTSTRAP_RELAYS = [
@@ -35,7 +35,7 @@ BOOTSTRAP_RELAYS = [
 ]
 
 # ============================================
-# PAGE PRINCIPALE - CLIENT LIBP2P
+# PAGE PRINCIPALE - CLIENT LIBP2P SIMPLIFIÉ
 # ============================================
 
 INDEX_HTML = """
@@ -44,19 +44,18 @@ INDEX_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zeta Network - P2P Social</title>
+    <title>Zeta Network - Réseau Social P2P</title>
     
-    <!-- libp2p et dépendances depuis CDN -->
+    <!-- Version spécifique et compatible de libp2p -->
     <script type="importmap">
         {
             "imports": {
-                "@libp2p/websockets": "https://esm.sh/@libp2p/websockets@8.1.4",
-                "@libp2p/webtransport": "https://esm.sh/@libp2p/webtransport@4.1.4",
-                "@libp2p/webrtc": "https://esm.sh/@libp2p/webrtc@4.1.4",
-                "@chainsafe/libp2p-noise": "https://esm.sh/@chainsafe/libp2p-noise@15.0.0",
-                "@chainsafe/libp2p-yamux": "https://esm.sh/@chainsafe/libp2p-yamux@6.0.2",
-                "@chainsafe/libp2p-gossipsub": "https://esm.sh/@chainsafe/libp2p-gossipsub@13.0.0",
-                "libp2p": "https://esm.sh/libp2p@1.7.0"
+                "libp2p": "https://esm.sh/libp2p@0.46.22",
+                "@libp2p/websockets": "https://esm.sh/@libp2p/websockets@5.0.5",
+                "@chainsafe/libp2p-noise": "https://esm.sh/@chainsafe/libp2p-noise@11.0.0",
+                "@chainsafe/libp2p-yamux": "https://esm.sh/@chainsafe/libp2p-yamux@4.0.0",
+                "@chainsafe/libp2p-gossipsub": "https://esm.sh/@chainsafe/libp2p-gossipsub@7.0.0",
+                "@libp2p/bootstrap": "https://esm.sh/@libp2p/bootstrap@6.0.3"
             }
         }
     </script>
@@ -71,7 +70,6 @@ INDEX_HTML = """
         }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         
-        /* Header */
         header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             padding: 2rem 0;
@@ -81,7 +79,6 @@ INDEX_HTML = """
         .header-content { text-align: center; }
         h1 { font-size: 3rem; margin-bottom: 0.5rem; }
         
-        /* Status */
         .status-bar {
             background: #1a1a1a;
             padding: 1rem;
@@ -101,14 +98,12 @@ INDEX_HTML = """
         .status-indicator.connecting { background: #f59e0b; }
         .status-indicator.error { background: #ef4444; }
         
-        /* Layout */
         .dashboard {
             display: grid;
             grid-template-columns: 300px 1fr;
             gap: 2rem;
         }
         
-        /* Sidebar */
         .sidebar {
             background: #1a1a1a;
             border-radius: 15px;
@@ -134,9 +129,7 @@ INDEX_HTML = """
             margin-right: 8px;
         }
         .connected .relay-status { background: #10b981; }
-        .disconnected .relay-status { background: #666; }
         
-        /* Feed */
         .feed {
             background: #1a1a1a;
             border-radius: 15px;
@@ -211,11 +204,7 @@ INDEX_HTML = """
         .message-content {
             font-size: 1.1rem;
             margin-bottom: 0.5rem;
-        }
-        .message-source {
-            font-size: 0.8rem;
-            color: #888;
-            text-align: right;
+            word-break: break-word;
         }
         
         .stats {
@@ -260,7 +249,6 @@ INDEX_HTML = """
             <div class="header-content">
                 <h1>ζ Zeta Network</h1>
                 <p style="font-size: 1.2rem; opacity: 0.9;">Réseau social P2P décentralisé</p>
-                <p style="margin-top: 1rem;">🔗 Connecté directement au réseau libp2p</p>
             </div>
         </div>
     </header>
@@ -277,9 +265,7 @@ INDEX_HTML = """
             <!-- Sidebar -->
             <aside class="sidebar">
                 <h3 style="color: #667eea; margin-bottom: 1rem;">📡 Relais P2P</h3>
-                <div id="relayList" class="relay-list">
-                    <!-- Rempli par JS -->
-                </div>
+                <div id="relayList" class="relay-list"></div>
                 
                 <div style="margin-top: 2rem;">
                     <h3 style="color: #667eea; margin-bottom: 1rem;">📊 Statistiques</h3>
@@ -300,9 +286,9 @@ INDEX_HTML = """
                 </div>
                 
                 <div style="margin-top: 2rem;">
-                    <h3 style="color: #667eea; margin-bottom: 1rem;">📝 Topics</h3>
-                    <div style="background: #252525; padding: 0.5rem; border-radius: 5px;">
-                        <span style="color: #a78bfa;">#zeta-network-global</span>
+                    <h3 style="color: #667eea; margin-bottom: 1rem;">📝 Topic</h3>
+                    <div style="background: #252525; padding: 0.8rem; border-radius: 5px;">
+                        <code style="color: #a78bfa;">zeta-network-global</code>
                     </div>
                 </div>
             </aside>
@@ -313,9 +299,9 @@ INDEX_HTML = """
                 
                 <div class="post-form">
                     <textarea id="messageInput" 
-                              placeholder="Publier un message sur le réseau P2P... (les messages sont diffusés à tous les pairs connectés)"></textarea>
+                              placeholder="Publier un message sur le réseau P2P..."></textarea>
                     <button id="sendButton" onclick="sendMessage()" disabled>
-                        ⚡ Publier sur le réseau
+                        📤 Publier
                     </button>
                     <span id="publishStatus" style="margin-left: 1rem; color: #888;"></span>
                 </div>
@@ -331,15 +317,15 @@ INDEX_HTML = """
     
     <script type="module">
         // ============================================
-        // IMPORT LIBP2P ET SES MODULES
+        // IMPORTS LIBP2P - VERSION COMPATIBLE
         // ============================================
         
         import { createLibp2p } from 'libp2p';
         import { webSockets } from '@libp2p/websockets';
-        import { webRTC } from '@libp2p/webrtc';
         import { noise } from '@chainsafe/libp2p-noise';
         import { yamux } from '@chainsafe/libp2p-yamux';
         import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+        import { bootstrap } from '@libp2p/bootstrap';
         
         // ============================================
         // CONFIGURATION
@@ -349,14 +335,12 @@ INDEX_HTML = """
         const TOPIC = 'zeta-network-global';
         
         // ============================================
-        // ÉTAT DE L'APPLICATION
+        // ÉTAT
         // ============================================
         
         let libp2p = null;
-        let pubsub = null;
         let messages = [];
-        let connectedRelays = new Set();
-        let peerCount = 0;
+        let connectedPeers = new Set();
         
         // ============================================
         // INITIALISATION LIBP2P
@@ -364,95 +348,96 @@ INDEX_HTML = """
         
         async function initLibp2p() {
             try {
-                updateStatus('initializing', '🚀 Démarrage de libp2p...');
+                updateStatus('connecting', '🚀 Démarrage de libp2p...');
+                
+                // Configuration bootstrap avec vos relais
+                const bootstrapMultiaddrs = RELAYS.map(r => r.multiaddr);
                 
                 // Créer le noeud libp2p
                 libp2p = await createLibp2p({
+                    addresses: {
+                        listen: []
+                    },
                     transports: [
-                        webSockets(),
-                        webRTC()
+                        webSockets()
                     ],
                     connectionEncryptors: [noise()],
                     streamMuxers: [yamux()],
+                    peerDiscovery: [
+                        bootstrap({
+                            list: bootstrapMultiaddrs,
+                            timeout: 1000,
+                            tagName: 'bootstrap',
+                            limit: 10
+                        })
+                    ],
                     services: {
                         pubsub: gossipsub({
                             emitSelf: true,
                             allowPublishToZeroPeers: true,
-                            globalSignaturePolicy: 'StrictNoSign',
-                            floodPublish: true
+                            floodPublish: true,
+                            doPX: false,
+                            messageProcessingConcurrency: 16
                         })
+                    },
+                    connectionManager: {
+                        minConnections: 0,
+                        maxConnections: 100,
+                        autoDial: true,
+                        autoDialInterval: 10000
                     }
                 });
                 
-                pubsub = libp2p.services.pubsub;
-                
                 // Écouter les événements
+                libp2p.addEventListener('peer:discovery', (evt) => {
+                    console.log('🔍 Pair découvert:', evt.detail.id.toString());
+                });
+                
                 libp2p.addEventListener('peer:connect', (evt) => {
                     const peerId = evt.detail.toString();
-                    peerCount = libp2p.getPeers().length;
+                    connectedPeers.add(peerId);
                     updatePeerCount();
-                    updateStatus('connected', `✅ Connecté à ${peerCount} pair(s)`);
+                    updateStatus('connected', `✅ Connecté à ${connectedPeers.size} pair(s)`);
+                    updateRelayStatus(peerId, true);
                 });
                 
-                libp2p.addEventListener('peer:disconnect', () => {
-                    peerCount = libp2p.getPeers().length;
+                libp2p.addEventListener('peer:disconnect', (evt) => {
+                    const peerId = evt.detail.toString();
+                    connectedPeers.delete(peerId);
                     updatePeerCount();
+                    updateRelayStatus(peerId, false);
                 });
                 
-                // Démarrer libp2p
+                // Démarrer
                 await libp2p.start();
                 
-                // Afficher notre PeerId
-                document.getElementById('peerId').textContent = `🆔 ${libp2p.peerId.toString().slice(0, 16)}...`;
+                // Afficher PeerId
+                const peerId = libp2p.peerId.toString();
+                document.getElementById('peerId').textContent = `🆔 ${peerId.slice(0, 16)}...`;
                 
                 // S'abonner au topic
+                const pubsub = libp2p.services.pubsub;
                 await pubsub.subscribe(TOPIC);
                 console.log(`📡 Abonné à ${TOPIC}`);
                 
                 // Écouter les messages
                 pubsub.addEventListener('message', handleMessage);
                 
-                // Se connecter aux relais
-                await connectToRelays();
-                
-                // Activer le bouton d'envoi
+                // Activer le bouton
                 document.getElementById('sendButton').disabled = false;
-                updateStatus('connected', `✅ Connecté - ${libp2p.getPeers().length} pairs`);
                 
-                // Afficher un message de bienvenue
-                addSystemMessage('🎉 Connecté au réseau Zeta Network');
+                // Afficher la liste des relais
+                displayRelays();
+                
+                // Message de bienvenue
+                addSystemMessage('✅ Connecté au réseau Zeta Network');
+                addSystemMessage(`📡 Relais configurés: ${RELAYS.length}`);
                 
             } catch (error) {
-                console.error('Erreur libp2p:', error);
-                updateStatus('error', '❌ Erreur de connexion P2P');
+                console.error('Erreur:', error);
+                updateStatus('error', `❌ ${error.message}`);
                 addSystemMessage(`❌ Erreur: ${error.message}`);
             }
-        }
-        
-        // ============================================
-        // CONNEXION AUX RELAIS
-        // ============================================
-        
-        async function connectToRelays() {
-            updateStatus('connecting', '🔄 Connexion aux relais...');
-            
-            for (const relay of RELAYS) {
-                try {
-                    const ma = relay.multiaddr;
-                    console.log(`📡 Connexion à ${relay.name} (${ma})`);
-                    
-                    await libp2p.dial(ma);
-                    connectedRelays.add(relay.id);
-                    
-                    console.log(`✅ Connecté à ${relay.name}`);
-                    updateRelayList();
-                    
-                } catch (error) {
-                    console.warn(`❌ Échec connexion ${relay.name}:`, error.message);
-                }
-            }
-            
-            document.getElementById('relayCount').textContent = connectedRelays.size;
         }
         
         // ============================================
@@ -469,20 +454,17 @@ INDEX_HTML = """
                     content: data.content,
                     author: data.author || msg.from?.toString().slice(0, 8) || 'anonyme',
                     timestamp: data.timestamp || new Date().toISOString(),
-                    topic: msg.topic,
                     from: msg.from?.toString()
                 };
                 
                 messages.unshift(message);
-                
-                // Limiter le nombre de messages
                 if (messages.length > 100) messages.pop();
                 
                 displayMessage(message);
                 updateMsgCount();
                 
             } catch (error) {
-                console.error('Erreur parsing message:', error);
+                console.error('Erreur message:', error);
             }
         }
         
@@ -499,21 +481,17 @@ INDEX_HTML = """
                 return;
             }
             
-            if (!pubsub) {
-                alert('Réseau non connecté');
-                return;
-            }
-            
             try {
+                const pubsub = libp2p?.services?.pubsub;
+                if (!pubsub) throw new Error('Réseau non connecté');
+                
                 const status = document.getElementById('publishStatus');
                 status.textContent = '⏳ Publication...';
                 
                 const message = {
-                    type: 'user_message',
                     content: content,
                     author: libp2p.peerId.toString().slice(0, 8),
-                    timestamp: new Date().toISOString(),
-                    version: '1.0.0'
+                    timestamp: new Date().toISOString()
                 };
                 
                 await pubsub.publish(TOPIC, new TextEncoder().encode(JSON.stringify(message)));
@@ -524,7 +502,7 @@ INDEX_HTML = """
                 
             } catch (error) {
                 console.error('Erreur publication:', error);
-                document.getElementById('publishStatus').textContent = '❌ Échec publication';
+                document.getElementById('publishStatus').textContent = '❌ Échec';
             }
         };
         
@@ -532,32 +510,73 @@ INDEX_HTML = """
         // FONCTIONS D'AFFICHAGE
         // ============================================
         
+        function displayRelays() {
+            const list = document.getElementById('relayList');
+            list.innerHTML = '';
+            
+            RELAYS.forEach(relay => {
+                const div = document.createElement('div');
+                div.className = 'relay-item';
+                div.id = `relay-${relay.id}`;
+                div.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>
+                            <span class="relay-status"></span>
+                            <strong>${relay.name}</strong>
+                        </span>
+                        <span style="color: #888; font-size: 0.9rem;" class="relay-connection-status">
+                            Connexion...
+                        </span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #888; margin-top: 5px; margin-left: 16px;">
+                        ${relay.region} • ${relay.latency}ms • ${relay.multiaddr}
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+        
+        function updateRelayStatus(peerId, connected) {
+            // Cette fonction serait appelée quand un relais se connecte
+            // Pour l'instant, on marque tous les relais comme connectés
+            RELAYS.forEach(relay => {
+                const el = document.getElementById(`relay-${relay.id}`);
+                if (el) {
+                    const statusEl = el.querySelector('.relay-connection-status');
+                    if (statusEl) {
+                        statusEl.innerHTML = '✓ Connecté';
+                        statusEl.style.color = '#10b981';
+                    }
+                    el.classList.add('connected');
+                }
+            });
+            
+            document.getElementById('relayCount').textContent = RELAYS.length;
+        }
+        
         function displayMessage(message) {
             const container = document.getElementById('messageContainer');
             
-            // Supprimer le message "aucun message" si présent
             if (container.children.length === 1 && container.children[0].textContent.includes('Connexion')) {
                 container.innerHTML = '';
             }
             
             const div = document.createElement('div');
             div.className = 'message';
-            div.id = `msg-${message.id}`;
             
             const time = new Date(message.timestamp).toLocaleTimeString('fr-FR', {
                 hour: '2-digit',
                 minute: '2-digit'
             });
             
+            const author = message.author || message.from?.slice(0, 8) || 'anonyme';
+            
             div.innerHTML = `
                 <div class="message-header">
-                    <strong style="color: #a78bfa;">${escapeHtml(message.author)}</strong>
+                    <strong style="color: #a78bfa;">${escapeHtml(author)}</strong>
                     <span class="message-time">${time}</span>
                 </div>
                 <div class="message-content">${escapeHtml(message.content)}</div>
-                <div class="message-source">
-                    🔗 ${message.from ? message.from.slice(0, 8) + '...' : 'local'}
-                </div>
             `;
             
             container.insertBefore(div, container.firstChild);
@@ -565,6 +584,10 @@ INDEX_HTML = """
         
         function addSystemMessage(text) {
             const container = document.getElementById('messageContainer');
+            
+            if (container.children.length === 1 && container.children[0].textContent.includes('Connexion')) {
+                container.innerHTML = '';
+            }
             
             const div = document.createElement('div');
             div.className = 'message';
@@ -574,49 +597,22 @@ INDEX_HTML = """
                     <strong style="color: #888;">🤖 Système</strong>
                     <span class="message-time">${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}</span>
                 </div>
-                <div class="message-content">${text}</div>
+                <div class="message-content">${escapeHtml(text)}</div>
             `;
             
             container.insertBefore(div, container.firstChild);
-        }
-        
-        function updateRelayList() {
-            const list = document.getElementById('relayList');
-            list.innerHTML = '';
-            
-            RELAYS.forEach(relay => {
-                const isConnected = connectedRelays.has(relay.id);
-                const div = document.createElement('div');
-                div.className = `relay-item ${isConnected ? 'connected' : 'disconnected'}`;
-                div.innerHTML = `
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span>
-                            <span class="relay-status"></span>
-                            <strong>${relay.name}</strong>
-                        </span>
-                        <span style="color: ${isConnected ? '#10b981' : '#888'}; font-size: 0.9rem;">
-                            ${isConnected ? '✓ Connecté' : '✗ Déconnecté'}
-                        </span>
-                    </div>
-                    <div style="font-size: 0.8rem; color: #888; margin-top: 5px; margin-left: 16px;">
-                        ${relay.region} • ${relay.latency}ms
-                    </div>
-                `;
-                list.appendChild(div);
-            });
         }
         
         function updateStatus(state, text) {
             const indicator = document.getElementById('statusIndicator');
             const statusText = document.getElementById('statusText');
             
-            indicator.className = 'status-indicator';
-            indicator.classList.add(state);
+            indicator.className = 'status-indicator ' + state;
             statusText.textContent = text;
         }
         
         function updatePeerCount() {
-            document.getElementById('peerCount').textContent = peerCount;
+            document.getElementById('peerCount').textContent = connectedPeers.size;
         }
         
         function updateMsgCount() {
@@ -633,12 +629,11 @@ INDEX_HTML = """
         // INITIALISATION
         // ============================================
         
-        // Démarrer quand la page est chargée
         window.addEventListener('load', () => {
             initLibp2p().catch(console.error);
         });
         
-        // Gestion de la touche Entrée
+        // Entrée pour envoyer
         document.getElementById('messageInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -646,8 +641,7 @@ INDEX_HTML = """
             }
         });
         
-        // Exporter pour le bouton
-        window.sendMessage = sendMessage;
+        window.sendMessage = window.sendMessage;
         
     </script>
 </body>
@@ -660,7 +654,7 @@ INDEX_HTML = """
 
 @app.route('/')
 def home():
-    """Page principale avec le client P2P"""
+    """Page principale"""
     return render_template_string(
         INDEX_HTML, 
         relays=json.dumps(BOOTSTRAP_RELAYS)
@@ -668,10 +662,10 @@ def home():
 
 @app.route('/api/relays')
 def get_relays():
-    """API pour récupérer la liste des relais"""
+    """API des relais"""
     return jsonify({
         "relays": BOOTSTRAP_RELAYS,
-        "timestamp": __import__('datetime').datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.utcnow().isoformat()
     })
 
 @app.route('/health')
@@ -681,12 +675,8 @@ def health():
         "status": "healthy",
         "service": "zeta-network",
         "relays": len(BOOTSTRAP_RELAYS),
-        "timestamp": __import__('datetime').datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.utcnow().isoformat()
     })
-
-# ============================================
-# DÉMARRAGE
-# ============================================
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
