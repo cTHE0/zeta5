@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeta Network - Réseau Social P2P</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+        .header { text-align: center; margin-bottom: 60px; }
+        h1 { font-size: 3.5rem; margin-bottom: 20px; }
+        .tagline { font-size: 1.3rem; opacity: 0.9; }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+        .card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .card h3 { font-size: 1.8rem; margin-bottom: 20px; }
+        .relay-list {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        .relay-item {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+        }
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            margin-right: 10px;
+        }
+        .btn {
+            background: white;
+            color: #764ba2;
+            padding: 12px 30px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 20px;
+            transition: transform 0.3s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .install-code {
+            background: rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 10px;
+            font-family: monospace;
+            margin: 20px 0;
+            word-break: break-all;
+        }
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 Zeta Network</h1>
+            <p class="tagline">Le réseau social décentralisé</p>
+            <p style="margin-top: 20px;">Vos données vous appartiennent • P2P • Open Source</p>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <h3>🎯 Pour les utilisateurs</h3>
+                <p>Accédez au réseau en un clic, directement depuis votre navigateur.</p>
+                <div style="margin-top: 20px;">
+                    <span class="status"></span> Réseau actif
+                </div>
+                <div id="stats" style="margin-top: 20px;">
+                    Chargement...
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🚀 Devenir un relais</h3>
+                <p>Contribuez au réseau en hébergeant un relais sur votre VPS.</p>
+                <div class="install-code">
+                    curl -sSL https://raw.githubusercontent.com/cTHE0/zeta5/main/install-relay.sh | sudo bash
+                </div>
+                <button class="btn" onclick="copyCommand()">📋 Copier la commande</button>
+                <p style="margin-top: 20px; font-size: 0.9rem;">
+                    ✅ Ubuntu/Debian • 1GB RAM • Port 4001 ouvert
+                </p>
+            </div>
+
+            <div class="card">
+                <h3>📊 Relais actifs</h3>
+                <div class="relay-list" id="relay-list">
+                    Chargement des relais...
+                </div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <span id="relay-count">0</span> relais en ligne
+                </div>
+            </div>
+        </div>
+
+        <footer style="text-align: center; margin-top: 60px; opacity: 0.8;">
+            <p>Zeta Network 2026 • Open Source • MIT License</p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/cTHE0/zeta5" style="color: white;">GitHub</a> • 
+                <a href="/docs" style="color: white;">Documentation</a> • 
+                <a href="mailto:admin@zetanetwork.org" style="color: white;">Contact</a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        async function loadRelays() {
+            try {
+                const response = await fetch('/api/v1/network/relays');
+                const data = await response.json();
+                
+                const list = document.getElementById('relay-list');
+                const count = document.getElementById('relay-count');
+                
+                if (data.relays && data.relays.length > 0) {
+                    count.textContent = data.relays.length;
+                    list.innerHTML = data.relays.map(relay => `
+                        <div class="relay-item">
+                            <span>
+                                <span class="status"></span>
+                                ${relay.name || relay.id}
+                            </span>
+                            <span style="opacity: 0.7;">${relay.latency || '?'}ms</span>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = '<div style="text-align: center; padding: 20px;">Aucun relais actif</div>';
+                    count.textContent = '0';
+                }
+                
+                document.getElementById('stats').innerHTML = `
+                    <strong>${data.total || 0}</strong> relais totaux<br>
+                    <strong>${data.relays?.length || 0}</strong> en ligne
+                `;
+                
+            } catch (error) {
+                document.getElementById('relay-list').innerHTML = 
+                    '<div style="color: #ff9999;">Erreur de chargement</div>';
+            }
+        }
+
+        function copyCommand() {
+            const command = 'curl -sSL https://raw.githubusercontent.com/cTHE0/zeta5/main/install-relay.sh | sudo bash';
+            navigator.clipboard.writeText(command);
+            alert('Commande copiée !');
+        }
+
+        loadRelays();
+        setInterval(loadRelays, 30000);
+    </script>
+</body>
+</html>

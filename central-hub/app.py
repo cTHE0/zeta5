@@ -1,137 +1,159 @@
 """
-APP.PY MINIMAL POUR TEST - Zeta Network
+Zeta Network - Hub Central
+PythonAnywhere - Version production
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
+from datetime import datetime
+import json
 import os
 
-# Créer l'application Flask
 app = Flask(__name__)
+CORS(app)
 
-# Configuration de base
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-tt665')
-app.config['TEMPLATES_AUTO_RELOAD'] = True
+# ============================================
+# CONFIGURATION
+# ============================================
 
-# Route de test principale
+BOOTSTRAP_RELAYS = [
+    {
+        "id": "relay-01",
+        "name": "Relais Principal",
+        "multiaddr": "/ip4/65.75.201.11/tcp/4001/ws",
+        "endpoint": "ws://65.75.201.11:4001",
+        "type": "websocket",
+        "region": "eu-west",
+        "latency": 45,
+        "status": "online",
+        "is_verified": True,
+        "is_bootstrap": True
+    },
+    {
+        "id": "relay-02",
+        "name": "Relais Secondaire",
+        "multiaddr": "/ip4/65.75.200.180/tcp/4001/ws",
+        "endpoint": "ws://65.75.200.180:4001",
+        "type": "websocket",
+        "region": "eu-central",
+        "latency": 60,
+        "status": "online",
+        "is_verified": True,
+        "is_bootstrap": True
+    }
+]
+
+# Stockage temporaire (en production: utiliser une DB)
+PENDING_RELAYS = []
+ACTIVE_RELAYS = {r['id']: r for r in BOOTSTRAP_RELAYS}
+
+# ============================================
+# ROUTES PRINCIPALES
+# ============================================
+
 @app.route('/')
 def index():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>✅ Zeta Network - ONLINE</title>
-        <style>
-            body { 
-                font-family: Arial, sans-serif; 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                text-align: center;
-                padding: 50px;
-            }
-            .container {
-                background: rgba(0,0,0,0.7);
-                padding: 30px;
-                border-radius: 15px;
-                display: inline-block;
-            }
-            h1 { color: #4CAF50; }
-            .status { 
-                font-size: 24px; 
-                margin: 20px 0;
-                padding: 10px;
-                background: #4CAF50;
-                border-radius: 5px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🌐 Zeta Network</h1>
-            <div class="status">✅ SERVEUR CENTRAL ACTIF</div>
-            <p>Hub central du réseau social P2P décentralisé</p>
-            <p><strong>URL:</strong> https://zetanetwork.org</p>
-            <p><strong>Statut:</strong> En ligne et opérationnel</p>
-            <hr>
-            <h3>📡 Endpoints API:</h3>
-            <ul style="text-align: left; display: inline-block;">
-                <li><a href="/api/relays" style="color: #ffcc00;">/api/relays</a> - Liste des relais</li>
-                <li><a href="/api/health" style="color: #ffcc00;">/api/health</a> - Santé du serveur</li>
-                <li><a href="/api/network/stats" style="color: #ffcc00;">/api/network/stats</a> - Statistiques</li>
-            </ul>
-        </div>
-    </body>
-    </html>
-    """
+    """Page d'accueil"""
+    return render_template('index.html')
 
-# API: Liste des relais
-@app.route('/api/relays')
+@app.route('/api/v1/network/relays')
 def get_relays():
+    """Liste des relais actifs"""
+    relays = list(ACTIVE_RELAYS.values())
     return jsonify({
-        "relays": [
-            {
-                "id": "relay-01",
-                "name": "Relais Principal",
-                "multiaddr": "/ip4/65.75.201.11/tcp/4001/ws",
-                "endpoint": "ws://65.75.201.11:4001",
-                "type": "websocket",
-                "region": "eu-west",
-                "latency": 45,
-                "status": "online",
-                "is_verified": True
-            },
-            {
-                "id": "relay-02", 
-                "name": "Relais Secondaire",
-                "multiaddr": "/ip4/65.75.200.180/tcp/4001/ws",
-                "endpoint": "ws://65.75.200.180:4001",
-                "type": "websocket",
-                "region": "eu-central",
-                "latency": 60,
-                "status": "online",
-                "is_verified": True
-            }
-        ],
-        "network_status": "active",
-        "total_relays": 2,
-        "timestamp": "2026-02-09T12:00:00Z"
+        'relays': relays,
+        'total': len(relays),
+        'timestamp': datetime.utcnow().isoformat()
     })
 
-# API: Santé du serveur
-@app.route('/api/health')
+@app.route('/api/v1/relays/notify', methods=['POST'])
+def notify_relay():
+    """Notification d'installation d'un nouveau relais"""
+    try:
+        data = request.get_json()
+        ip = data.get('relay_ip')
+        
+        # Ajouter aux relais en attente
+        pending = {
+            'id': f"pending-{len(PENDING_RELAYS)+1}",
+            'ip': ip,
+            'timestamp': datetime.utcnow().isoformat(),
+            'data': data
+        }
+        PENDING_RELAYS.append(pending)
+        
+        print(f"📡 Nouveau relais installé: {ip}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Notification reçue',
+            'next_steps': [
+                'Votre relais sera approuvé sous 24h',
+                'Consultez votre email pour confirmation',
+                'Merci de contribuer au réseau!'
+            ]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/v1/relays/register', methods=['POST'])
+def register_relay():
+    """Enregistrement officiel d'un relais"""
+    try:
+        data = request.get_json()
+        relay_id = data.get('id', f"relay-{len(ACTIVE_RELAYS)+1}")
+        
+        ACTIVE_RELAYS[relay_id] = {
+            **data,
+            'status': 'online',
+            'is_verified': True,
+            'registered_at': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify({
+            'success': True,
+            'relay_id': relay_id,
+            'message': 'Relais enregistré avec succès'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/v1/relays/health', methods=['POST'])
+def relay_health():
+    """Heartbeat des relais"""
+    try:
+        data = request.get_json()
+        relay_id = data.get('relay_id')
+        
+        if relay_id in ACTIVE_RELAYS:
+            ACTIVE_RELAYS[relay_id]['last_seen'] = datetime.utcnow().isoformat()
+            ACTIVE_RELAYS[relay_id]['connected_users'] = data.get('connected_users', 0)
+            ACTIVE_RELAYS[relay_id]['status'] = 'online'
+            
+        return jsonify({'success': True})
+        
+    except Exception:
+        return jsonify({'success': False}), 500
+
+@app.route('/admin/pending')
+def pending_relays():
+    """Page admin - relais en attente"""
+    return jsonify({
+        'pending': PENDING_RELAYS,
+        'total': len(PENDING_RELAYS)
+    })
+
+@app.route('/health')
 def health():
+    """Health check"""
     return jsonify({
-        "status": "healthy",
-        "service": "zeta-central-hub",
-        "version": "1.0.0",
-        "uptime": "0",
-        "timestamp": "2026-02-09T12:00:00Z"
+        'status': 'healthy',
+        'service': 'zeta-central-hub',
+        'relays': len(ACTIVE_RELAYS),
+        'timestamp': datetime.utcnow().isoformat()
     })
 
-# API: Statistiques réseau
-@app.route('/api/network/stats')
-def network_stats():
-    return jsonify({
-        "total_relays": 2,
-        "online_relays": 2,
-        "active_users": 0,
-        "messages_today": 0,
-        "network_load": "low",
-        "timestamp": "2026-02-09T12:00:00Z"
-    })
-
-# Page de test
-@app.route('/test')
-def test():
-    return "✅ Test réussi - Flask fonctionne correctement"
-
-# Gestion d'erreur 404
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Endpoint not found"}), 404
-
-# Point d'entrée pour le développement
 if __name__ == '__main__':
-    print("🚀 Démarrage de Zeta Network...")
-    print(f"📁 Répertoire: {os.getcwd()}")
-    print(f"📄 Fichiers: {os.listdir('.')}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

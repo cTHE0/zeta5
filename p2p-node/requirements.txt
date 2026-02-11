@@ -1,7 +1,4 @@
-aiohttp==3.9.0
-PyYAML==6.0
+Flask==2.3.3
+Flask-CORS==4.0.0
+gunicorn==21.2.0
 python-dotenv==1.0.0
-psutil==5.9.6
-prometheus-client==0.18.0
-ujson==5.8.0
-# libp2p dependencies would be added here

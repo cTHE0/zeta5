@@ -1,42 +1,31 @@
-# Configuration du nœud P2P Zeta Network
+# Zeta Network Relay - Exemple de configuration
+# Copiez vers config.yaml et modifiez selon vos besoins
 
 network:
   listen_address: "0.0.0.0"
   listen_port: 4001
-  public_ip: "65.75.201.11" 
+  public_ip: "VOTRE_IP_PUBLIQUE"
   max_connections: 1000
-  connection_timeout: 30
   heartbeat_interval: 30
-  reconnect_attempts: 5
-  reconnect_delay: 5
 
 gossip:
   topics:
     - "zeta-network-global"
     - "zeta-system-announcements"
-    - "zeta-user-messages"
   message_cache_size: 5000
   heartbeat_interval: 1
-  fanout_ttl: 60
   max_message_size: 1048576  # 1MB
-  validate_messages: true
 
 bootstrap:
   central_hub: "https://zetanetwork.org"
-  bootstrap_relays:
-    - "/ip4/65.75.201.11/tcp/4001/ws/p2p/12D3KooWPrimaryRelayKey"
-    - "/ip4/65.75.200.180/tcp/4001/ws/p2p/12D3KooWSecondaryRelayKey"
-  min_connections: 3
+  min_connections: 1
   max_connections: 10
 
 logging:
   level: "INFO"
-  file: "zeta-node.log"
-  max_size_mb: 100
-  backup_count: 5
+  file: "/home/zetanode/zeta-relay.log"
 
-monitoring:
-  metrics_port: 9090
-  enable_prometheus: true
-  health_check_path: "/health"
-  status_path: "/status"
+relay:
+  name: "Mon-Relais"
+  contact: "admin@example.com"
+  region: "auto"
