@@ -1,33 +1,37 @@
 #!/usr/bin/env python3
 """
-Zeta Network Relay - Version simplifiée et stable
+Zeta Network Relay – Serveur WebSocket simple
+Écoute les connexions, relaie les messages entre pairs.
 """
 
 import asyncio
 import json
 import logging
+import sys
+from datetime import datetime
 import yaml
 import websockets
-from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('zeta-relay')
 
-class ZetaRelay:
+class Relay:
     def __init__(self, config_path='config.yaml'):
         with open(config_path) as f:
-            self.config = yaml.safe_load(f)
-        
-        self.node_id = f"relay-{self.config['network']['public_ip']}"
+            cfg = yaml.safe_load(f)
+        self.host = cfg['network']['listen_address']
+        self.port = cfg['network']['listen_port']
+        self.public_ip = cfg['network'].get('public_ip', 'unknown')
+        self.domain = cfg['network'].get('domain', self.public_ip)
         self.clients = set()
-        
-    async def handle_client(self, websocket, path):
-        """Gérer les connexions WebSocket"""
+        self.node_id = f"relay-{self.public_ip}"
+
+    async def handler(self, websocket, path):
+        """Gère une connexion client."""
         client_id = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
         self.clients.add(websocket)
-        
-        logger.info(f"👤 Client connecté: {client_id} (total: {len(self.clients)})")
-        
+        logger.info(f"👤 Client connecté {client_id} – total {len(self.clients)}")
+
         try:
             # Message de bienvenue
             await websocket.send(json.dumps({
@@ -36,11 +40,10 @@ class ZetaRelay:
                 'timestamp': datetime.utcnow().isoformat(),
                 'peers': len(self.clients)
             }))
-            
-            # Gérer les messages
-            async for message in websocket:
-                data = json.loads(message)
-                
+
+            # Boucle de réception
+            async for msg in websocket:
+                data = json.loads(msg)
                 if data.get('type') == 'ping':
                     await websocket.send(json.dumps({'type': 'pong'}))
                 elif data.get('type') == 'publish':
@@ -48,41 +51,27 @@ class ZetaRelay:
                     for client in self.clients:
                         if client != websocket:
                             try:
-                                await client.send(message)
+                                await client.send(msg)
                             except:
                                 pass
-                    
+                    # Accusé de réception
                     await websocket.send(json.dumps({
                         'type': 'ack',
                         'status': 'relayed'
                     }))
-                    
         except websockets.exceptions.ConnectionClosed:
-            logger.info(f"👤 Client déconnecté: {client_id}")
+            logger.info(f"👤 Client déconnecté {client_id}")
         finally:
             self.clients.discard(websocket)
-    
-    async def start(self):
-        """Démarrer le serveur"""
-        host = self.config['network']['listen_address']
-        port = self.config['network']['listen_port']
-        ip = self.config['network']['public_ip']
-        
-        logger.info(f"🚀 Démarrage du relais sur {ip}:{port}")
-        
-        async with websockets.serve(
-            self.handle_client,
-            host,
-            port,
-            ping_interval=20,
-            ping_timeout=60
-        ):
-            logger.info(f"✅ Relais prêt: ws://{ip}:{port}")
-            await asyncio.Future()  # Run forever
 
-async def main():
-    relay = ZetaRelay()
-    await relay.start()
+    async def run(self):
+        logger.info(f"🚀 Démarrage du relais {self.node_id} sur {self.host}:{self.port}")
+        async with websockets.serve(self.handler, self.host, self.port,
+                                    ping_interval=20, ping_timeout=60):
+            logger.info(f"✅ Relais prêt – ws://{self.public_ip}:{self.port}")
+            if self.domain != self.public_ip:
+                logger.info(f"   Domaine sécurisé : wss://{self.domain}")
+            await asyncio.Future()  # tourne indéfiniment
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(Relay().run())
